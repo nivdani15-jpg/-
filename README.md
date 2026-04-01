@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Zoom Pro</title>
+
+<style>
+body { margin:0; font-family:Arial; background:#0f172a; color:white; text-align:center; }
+
+#join {
+    margin-top:100px;
+}
+
+#videos {
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+}
+
+video {
+    width:220px;
+    margin:5px;
+    border-radius:12px;
+}
+
+#controls {
+    position:fixed;
+    bottom:10px;
+    width:100%;
+}
+
+button {
+    margin:5px;
+    padding:10px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+}
+
+#chat {
+    position:fixed;
+    right:0;
+    top:0;
+    width:250px;
+    height:100%;
+    background:#020617;
+}
+
+#messages {
+    height:80%;
+    overflow:auto;
+}
+</style>
+
+</head>
+<body>
+
+<div id="join">
+<input id="name" placeholder="שם">
+<input id="room" placeholder="קוד חדר">
+<button onclick="start()">התחל</button>
+</div>
+
+<div id="videos"></div>
+
+<div id="controls" style="display:none;">
+<button onclick="toggleMic()">🎤</button>
+<button onclick="toggleCam()">📷</button>
+<button onclick="shareScreen()">🖥️</button>
+<button onclick="leave()">❌ יציאה</button>
+</div>
+
+<div id="chat" style="display:none;">
+<div id="messages"></div>
+<input id="msg">
+<button onclick="sendMsg()">שלח</button>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+
+<script>
+const socket = io();
+const peers = {};
+const videos = document.getElementById("videos");
+const messages = document.getElementById("messages");
+
+let localStream;
+let username;
+let roomId;
+
+// התחלה
+function start() {
+    username = document.getElementById("name").value;
+    roomId = document.getElementById("room").value;
+
+    document.getElementById("join").style.display = "none";
+    document.getElementById("controls").style.display = "block";
+    document.getElementById("chat").style.display = "block";
+
+    navigator.mediaDevices.getUserMedia({ video:true, audio:true })
+    .then(stream => {
+        localStream = stream;
+
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.muted = true;
+        video.autoplay = true;
+        videos.appendChild(video);
+
+        socket.emit("join-room", {roomId, username});
+    });
+}
+
+// משתמש נכנס
+socket.on("user-connected", data => {
+    const peer = createPeer(data.id, true);
+    peers[data.id] = peer;
+    showMessage("🔵 " + data.username + " נכנס");
+});
+
+// signal
+socket.on("signal", data => {
+    if (!peers[data.from]) {
+        peers[data.from] = createPeer(data.from, false);
+    }
+    peers[data.from].signal(data.signal);
+});
+
+// יציאה
+socket.on("user-disconnected", id => {
+    if (peers[id]) {
+        peers[id].destroy();
+        delete peers[id];
+    }
+});
+
+// צ'אט
+socket.on("chat-message", data => {
+    showMessage(data.user + ": " + data.message);
+});
+
+function showMessage(msg) {
+    const div = document.createElement("div");
+    div.innerText = msg;
+    messages.appendChild(div);
+}
+
+// יצירת peer
+function createPeer(userId, initiator) {
+    const peer = new SimplePeer({
+        initiator,
+        trickle:false,
+        stream:localStream
+    });
+
+    peer.on("signal", signal => {
+        socket.emit("signal", { to:userId, signal });
+    });
+
+    peer.on("stream", stream => {
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.autoplay = true;
+        videos.appendChild(video);
+    });
+
+    return peer;
+}
+
+// מיקרופון
+function toggleMic() {
+    const track = localStream.getAudioTracks()[0];
+    track.enabled = !track.enabled;
+}
+
+// מצלמה
+function toggleCam() {
+    const track = localStream.getVideoTracks()[0];
+    track.enabled = !track.enabled;
+}
+
+// שיתוף מסך
+function shareScreen() {
+    navigator.mediaDevices.getDisplayMedia({ video:true })
+    .then(screenStream => {
+        const track = screenStream.getVideoTracks()[0];
+
+        for (let id in peers) {
+            const sender = peers[id]._pc.getSenders()
+            .find(s => s.track.kind === "video");
+            sender.replaceTrack(track);
+        }
+    });
+}
+
+// יציאה מהחדר
+function leave() {
+    socket.emit("leave-room");
+    location.reload();
+}
+
+// צ'אט
+function sendMsg() {
+    const input = document.getElementById("msg");
+    socket.emit("chat-message", input.value);
+    input.value = "";
+}
+</script>
+
+</body>
+</html><!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Zoom Pro</title>
+
+<style>
+body { margin:0; font-family:Arial; background:#0f172a; color:white; text-align:center; }
+
+#join {
+    margin-top:100px;
+}
+
+#videos {
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+}
+
+video {
+    width:220px;
+    margin:5px;
+    border-radius:12px;
+}
+
+#controls {
+    position:fixed;
+    bottom:10px;
+    width:100%;
+}
+
+button {
+    margin:5px;
+    padding:10px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+}
+
+#chat {
+    position:fixed;
+    right:0;
+    top:0;
+    width:250px;
+    height:100%;
+    background:#020617;
+}
+
+#messages {
+    height:80%;
+    overflow:auto;
+}
+</style>
+
+</head>
+<body>
+
+<div id="join">
+<input id="name" placeholder="שם">
+<input id="room" placeholder="קוד חדר">
+<button onclick="start()">התחל</button>
+</div>
+
+<div id="videos"></div>
+
+<div id="controls" style="display:none;">
+<button onclick="toggleMic()">🎤</button>
+<button onclick="toggleCam()">📷</button>
+<button onclick="shareScreen()">🖥️</button>
+<button onclick="leave()">❌ יציאה</button>
+</div>
+
+<div id="chat" style="display:none;">
+<div id="messages"></div>
+<input id="msg">
+<button onclick="sendMsg()">שלח</button>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+
+<script>
+const socket = io();
+const peers = {};
+const videos = document.getElementById("videos");
+const messages = document.getElementById("messages");
+
+let localStream;
+let username;
+let roomId;
+
+// התחלה
+function start() {
+    username = document.getElementById("name").value;
+    roomId = document.getElementById("room").value;
+
+    document.getElementById("join").style.display = "none";
+    document.getElementById("controls").style.display = "block";
+    document.getElementById("chat").style.display = "block";
+
+    navigator.mediaDevices.getUserMedia({ video:true, audio:true })
+    .then(stream => {
+        localStream = stream;
+
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.muted = true;
+        video.autoplay = true;
+        videos.appendChild(video);
+
+        socket.emit("join-room", {roomId, username});
+    });
+}
+
+// משתמש נכנס
+socket.on("user-connected", data => {
+    const peer = createPeer(data.id, true);
+    peers[data.id] = peer;
+    showMessage("🔵 " + data.username + " נכנס");
+});
+
+// signal
+socket.on("signal", data => {
+    if (!peers[data.from]) {
+        peers[data.from] = createPeer(data.from, false);
+    }
+    peers[data.from].signal(data.signal);
+});
+
+// יציאה
+socket.on("user-disconnected", id => {
+    if (peers[id]) {
+        peers[id].destroy();
+        delete peers[id];
+    }
+});
+
+// צ'אט
+socket.on("chat-message", data => {
+    showMessage(data.user + ": " + data.message);
+});
+
+function showMessage(msg) {
+    const div = document.createElement("div");
+    div.innerText = msg;
+    messages.appendChild(div);
+}
+
+// יצירת peer
+function createPeer(userId, initiator) {
+    const peer = new SimplePeer({
+        initiator,
+        trickle:false,
+        stream:localStream
+    });
+
+    peer.on("signal", signal => {
+        socket.emit("signal", { to:userId, signal });
+    });
+
+    peer.on("stream", stream => {
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.autoplay = true;
+        videos.appendChild(video);
+    });
+
+    return peer;
+}
+
+// מיקרופון
+function toggleMic() {
+    const track = localStream.getAudioTracks()[0];
+    track.enabled = !track.enabled;
+}
+
+// מצלמה
+function toggleCam() {
+    const track = localStream.getVideoTracks()[0];
+    track.enabled = !track.enabled;
+}
+
+// שיתוף מסך
+function shareScreen() {
+    navigator.mediaDevices.getDisplayMedia({ video:true })
+    .then(screenStream => {
+        const track = screenStream.getVideoTracks()[0];
+
+        for (let id in peers) {
+            const sender = peers[id]._pc.getSenders()
+            .find(s => s.track.kind === "video");
+            sender.replaceTrack(track);
+        }
+    });
+}
+
+// יציאה מהחדר
+function leave() {
+    socket.emit("leave-room");
+    location.reload();
+}
+
+// צ'אט
+function sendMsg() {
+    const input = document.getElementById("msg");
+    socket.emit("chat-message", input.value);
+    input.value = "";
+}
+</script>
+
+</body>
+</html>
